@@ -1,7 +1,7 @@
 import type { MonthPoint, TrackAggregates } from "@offer-compare/engine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Badge, Button, Card, Field, Input, Select, Switch } from "@/components/ui";
+import { Badge, Button, Card, ConfirmButton, Field, Hint, Input, Select, Switch } from "@/components/ui";
 import { api } from "@/lib/api";
 import { downloadCsv, money, percent } from "@/lib/format";
 import type { OfferRecord } from "@/lib/offers";
@@ -44,6 +44,12 @@ type TimelineDetail = {
     color: string;
     regime: string;
     base_offer_id: string | null;
+    adjustments?: {
+      annual_bonus_month?: number | null;
+      annual_bonus_gross?: number;
+      annual_bonus_currency?: "RON" | "EUR" | "USD";
+      one_offs?: { month_index: number; gross: number; currency: "RON" | "EUR" | "USD" }[];
+    };
     raises: Raise[];
   }[];
 };
@@ -103,12 +109,26 @@ export function TimelinesPage() {
       </Card>
       <div className="grid gap-2">
         {(timelines.data ?? []).map((timeline) => (
-          <Link key={timeline.id} to={`/timelines/${timeline.id}`} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-            <div className="font-medium">{timeline.label}</div>
-            <div className="text-sm text-zinc-500">
-              {timeline.start_date} · {timeline.horizon_months} months · {timeline.tracks?.length ?? 0} tracks
-            </div>
-          </Link>
+          <div key={timeline.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <Link to={`/timelines/${timeline.id}`} className="min-w-0 flex-1">
+              <div className="font-medium">{timeline.label}</div>
+              <div className="text-sm text-zinc-500">
+                {String(timeline.start_date).slice(0, 10)} · {timeline.horizon_months} months · {timeline.tracks?.length ?? 0} tracks
+              </div>
+            </Link>
+            <ConfirmButton
+              title={`Delete ${timeline.label}?`}
+              body="Tracks, raises, and saved runs are removed with the timeline."
+              confirmLabel="Delete"
+              destructive
+              onConfirm={async () => {
+                await api(`/api/timelines/${timeline.id}`, { method: "DELETE" });
+                await client.invalidateQueries({ queryKey: ["timelines"] });
+              }}
+            >
+              <Button variant="destructive" size="sm">Delete</Button>
+            </ConfirmButton>
+          </div>
         ))}
       </div>
     </div>
@@ -117,6 +137,7 @@ export function TimelinesPage() {
 
 export function TimelineDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const client = useQueryClient();
   const timeline = useQuery({
     queryKey: ["timeline", id],
@@ -136,6 +157,15 @@ export function TimelineDetailPage() {
   const [raiseBase, setRaiseBase] = useState<"gross" | "net">("gross");
   const [raiseValue, setRaiseValue] = useState(10);
   const [compounding, setCompounding] = useState(true);
+  const [dateMode, setDateMode] = useState<"index" | "date">("index");
+  const [raiseDate, setRaiseDate] = useState("");
+  const [contractChange, setContractChange] = useState("");
+  const [trackColor, setTrackColor] = useState("#0f766e");
+  const [areaTrack, setAreaTrack] = useState("");
+  const [bonusMonth, setBonusMonth] = useState("");
+  const [bonusGross, setBonusGross] = useState(0);
+  const [oneOffMonth, setOneOffMonth] = useState(6);
+  const [oneOffGross, setOneOffGross] = useState(0);
 
   const run = useQuery({
     queryKey: ["timeline-run", id, pairA, pairB, timeline.data?.updated_at, timeline.data?.tracks],
@@ -170,23 +200,38 @@ export function TimelineDetailPage() {
         label: trackLabel || offer?.label || "Track",
         base_offer_id: offerId,
         regime,
-        color: ["#0f766e", "#b45309", "#1d4ed8", "#be123c"][(timeline.data?.tracks.length ?? 0) % 4],
+        color: trackColor,
       }),
     });
     await client.invalidateQueries({ queryKey: ["timeline", id] });
   }
 
+  function monthIndexFromDate(start: string, date: string) {
+    const [sy, sm] = start.slice(0, 7).split("-").map(Number);
+    const [dy, dm] = date.slice(0, 7).split("-").map(Number);
+    return (dy - sy) * 12 + (dm - sm);
+  }
+
   async function addRaise() {
+    const index = dateMode === "date" && raiseDate
+      ? monthIndexFromDate(String(timeline.data?.start_date ?? ""), raiseDate)
+      : Math.max(0, raiseMonth - 1);
     await api(`/api/tracks/${raiseTrack}/raises`, {
       method: "POST",
       body: JSON.stringify({
-        effective_month_index: Math.max(0, raiseMonth - 1),
+        effective_month_index: Math.max(0, index),
         kind: raiseKind,
         base: raiseBase,
         value: raiseValue,
         compounding,
+        contract_type_change: contractChange || null,
       }),
     });
+    await client.invalidateQueries({ queryKey: ["timeline", id] });
+  }
+
+  async function saveAdjustments(trackId: string, adjustments: NonNullable<TimelineDetail["tracks"][number]["adjustments"]>) {
+    await api(`/api/tracks/${trackId}`, { method: "PATCH", body: JSON.stringify({ adjustments }) });
     await client.invalidateQueries({ queryKey: ["timeline", id] });
   }
 
@@ -212,7 +257,22 @@ export function TimelineDetailPage() {
         <h1 className="text-xl font-semibold">{data.label}</h1>
         <Badge>{data.horizon_months} months from {String(data.start_date).slice(0, 10)}</Badge>
         <Badge>FX drift {data.fx_drift_percent}% / year</Badge>
-        <Button className="ml-auto" variant="outline" onClick={exportCsv}>Export CSV</Button>
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" onClick={exportCsv}>Export CSV</Button>
+          <ConfirmButton
+            title={`Delete ${data.label}?`}
+            body="Tracks, raises, and saved runs are removed with the timeline."
+            confirmLabel="Delete"
+            destructive
+            onConfirm={async () => {
+              await api(`/api/timelines/${id}`, { method: "DELETE" });
+              await client.invalidateQueries({ queryKey: ["timelines"] });
+              navigate("/timelines");
+            }}
+          >
+            <Button variant="destructive">Delete</Button>
+          </ConfirmButton>
+        </div>
       </div>
       <Card className="grid gap-3 p-4 md:grid-cols-3">
         <Field label="FX drift % / year (future months)">
@@ -265,6 +325,9 @@ export function TimelineDetailPage() {
             <option value="srl_profit">SRL profit</option>
           </Select>
         </Field>
+        <Field label="Color">
+          <Input type="color" value={trackColor} onChange={(event) => setTrackColor(event.target.value)} aria-label="Track color" />
+        </Field>
         <div className="flex items-end">
           <Button disabled={!offerId} onClick={() => void addTrack()}>Add track</Button>
         </div>
@@ -276,28 +339,38 @@ export function TimelineDetailPage() {
               <span className="inline-block h-3 w-3 rounded-full" style={{ background: track.color }} />
               <span className="font-medium">{track.label}</span>
               <Badge>{track.regime}</Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void api(`/api/tracks/${track.id}`, { method: "DELETE" }).then(() => client.invalidateQueries({ queryKey: ["timeline", id] }))}
+              <ConfirmButton
+                title={`Remove ${track.label}?`}
+                body="Raises on this track are deleted with it."
+                confirmLabel="Remove"
+                destructive
+                onConfirm={() => api(`/api/tracks/${track.id}`, { method: "DELETE" }).then(() => client.invalidateQueries({ queryKey: ["timeline", id] }))}
               >
-                Remove
-              </Button>
+                <Button variant="ghost" size="sm">Remove</Button>
+              </ConfirmButton>
             </div>
             <ul className="mt-2 text-xs text-zinc-500">
               {track.raises.map((raise) => (
-                <li key={raise.id}>
-                  Month {raise.effective_month_index + 1}: {raise.kind} {raise.value} on {raise.base}
-                  {raise.compounding ? " (compounding)" : " (on original base)"}
-                  <button
-                    className="ml-2 underline"
-                    onClick={() => void api(`/api/raises/${raise.id}`, { method: "DELETE" }).then(() => client.invalidateQueries({ queryKey: ["timeline", id] }))}
+                <li key={raise.id} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    Month {raise.effective_month_index + 1}
+                    {monthLabel(String(data.start_date), raise.effective_month_index)}: {raise.kind} {raise.value} on {raise.base}
+                    {raise.compounding ? " (compounding)" : " (on original base)"}
+                    {raise.contract_type_change ? ` · switch to ${raise.contract_type_change}` : ""}
+                  </span>
+                  <ConfirmButton
+                    title="Delete this raise?"
+                    body="The timeline will be recalculated without it."
+                    confirmLabel="Delete"
+                    destructive
+                    onConfirm={() => api(`/api/raises/${raise.id}`, { method: "DELETE" }).then(() => client.invalidateQueries({ queryKey: ["timeline", id] }))}
                   >
-                    delete
-                  </button>
+                    <button className="underline">delete</button>
+                  </ConfirmButton>
                 </li>
               ))}
             </ul>
+            <Adjustments track={track} onSave={(adjustments) => saveAdjustments(track.id, adjustments)} bonusMonth={bonusMonth} setBonusMonth={setBonusMonth} bonusGross={bonusGross} setBonusGross={setBonusGross} oneOffMonth={oneOffMonth} setOneOffMonth={setOneOffMonth} oneOffGross={oneOffGross} setOneOffGross={setOneOffGross} />
           </div>
         ))}
       </div>
@@ -310,9 +383,21 @@ export function TimelineDetailPage() {
             ))}
           </Select>
         </Field>
-        <Field label="Month number">
-          <Input type="number" value={raiseMonth} onChange={(event) => setRaiseMonth(Number(event.target.value))} />
+        <Field label="When">
+          <Select value={dateMode} onChange={(event) => setDateMode(event.target.value as "index" | "date")}>
+            <option value="index">Month number</option>
+            <option value="date">Absolute month</option>
+          </Select>
         </Field>
+        {dateMode === "index" ? (
+          <Field label="Month number (1 = first)">
+            <Input type="number" value={raiseMonth} onChange={(event) => setRaiseMonth(Number(event.target.value))} />
+          </Field>
+        ) : (
+          <Field label="Effective month">
+            <Input type="month" value={raiseDate} onChange={(event) => setRaiseDate(event.target.value)} />
+          </Field>
+        )}
         <Field label="Kind">
           <Select value={raiseKind} onChange={(event) => setRaiseKind(event.target.value as "percent" | "flat")}>
             <option value="percent">Percent</option>
@@ -328,6 +413,13 @@ export function TimelineDetailPage() {
         <Field label="Value">
           <Input type="number" value={raiseValue} onChange={(event) => setRaiseValue(Number(event.target.value))} />
         </Field>
+        <Field label="Contract change">
+          <Select value={contractChange} onChange={(event) => setContractChange(event.target.value)}>
+            <option value="">None</option>
+            <option value="EMPLOYMENT">Switch to CIM</option>
+            <option value="B2B">Switch to B2B</option>
+          </Select>
+        </Field>
         <div className="flex items-end gap-2">
           <label className="flex items-center gap-2 text-xs">
             <Switch checked={compounding} onCheckedChange={setCompounding} />
@@ -336,13 +428,14 @@ export function TimelineDetailPage() {
           <Button disabled={!raiseTrack} onClick={() => void addRaise()}>Add raise</Button>
         </div>
       </Card>
-      {run.isError ? <p className="text-sm text-red-600">{(run.error as Error).message}</p> : null}
+      {run.isLoading || run.isFetching ? <p className="text-sm text-zinc-500">Computing the monthly series…</p> : null}
+      {run.isError ? <p className="text-sm text-rose-700">{(run.error as Error).message}</p> : null}
       <div className="grid gap-3 md:grid-cols-4">
         {(run.data?.tracks ?? []).map((track) => (
           <Card key={track.id} className="p-3">
             <div className="text-sm text-zinc-500">{track.label}</div>
             <div className="num text-lg">{money(track.aggregates.cumulative_net_ron)}</div>
-            <div className="text-xs text-zinc-500">total net · avg {money(track.aggregates.average_monthly_net_ron)} / mo</div>
+            <div className="text-xs text-zinc-500">total net ({real ? "chart is real" : "nominal"}) · avg {money(track.aggregates.average_monthly_net_ron)} / mo</div>
             <div className="text-xs">Growth {percent(track.aggregates.total_growth)} · CAGR {percent(track.aggregates.cagr)}</div>
             <div className="text-xs text-zinc-500">Taxes and contributions {money(track.aggregates.cumulative_taxes_ron)}</div>
           </Card>
@@ -418,18 +511,26 @@ export function TimelineDetailPage() {
           </LineChart>
         </ResponsiveContainer>
       </Card>
-      <Card className="h-80 p-4">
-        <h2 className="mb-2 text-sm font-medium">Net vs taxes and contributions</h2>
-        <ResponsiveContainer width="100%" height="90%">
+      <Card className="h-96 p-4">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-medium">Net vs taxes and contributions</h2>
+          <Select aria-label="Area chart track" className="h-8 w-40" value={areaTrack || run.data?.tracks[0]?.id || ""} onChange={(event) => setAreaTrack(event.target.value)}>
+            {(run.data?.tracks ?? []).map((track) => (
+              <option key={track.id} value={track.id}>{track.label}</option>
+            ))}
+          </Select>
+        </div>
+        <ResponsiveContainer width="100%" height="80%">
           <AreaChart data={chart}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="month" />
             <YAxis />
             <Tooltip />
-            {(run.data?.tracks ?? []).slice(0, 1).map((track) => (
+            <Legend />
+            {(run.data?.tracks ?? []).filter((track) => track.id === (areaTrack || run.data?.tracks[0]?.id)).map((track) => (
               <Area key={track.id} dataKey={track.id} name={`${track.label} net`} stackId="1" stroke={track.color} fill={track.color} />
             ))}
-            {(run.data?.tracks ?? []).slice(0, 1).map((track) => (
+            {(run.data?.tracks ?? []).filter((track) => track.id === (areaTrack || run.data?.tracks[0]?.id)).map((track) => (
               <Area key={`${track.id}-tax`} dataKey={`${track.id}-tax`} name="Taxes + contributions" stackId="1" stroke="#b45309" fill="#fdba74" />
             ))}
           </AreaChart>
@@ -439,32 +540,145 @@ export function TimelineDetailPage() {
         {(run.data?.tracks ?? []).map((track) => (
           <details key={track.id} open>
             <summary className="cursor-pointer bg-zinc-100 px-3 py-2 text-sm font-medium dark:bg-zinc-900">{track.label}</summary>
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="text-zinc-500">
-                  {["Month", "Gross", "Net", "Effective", "Rules", "FX"].map((heading) => (
-                    <th key={heading} className="px-2 py-1">{heading}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {track.months.map((month) => (
-                  <tr key={month.month} className="border-t border-zinc-100 dark:border-zinc-800">
-                    <td className="px-2 py-1">{month.month}{month.raise_applied ? " ↑" : ""}</td>
-                    <td className="num px-2 py-1">{money(month.gross_monthly_ron)}</td>
-                    <td className="num px-2 py-1">{money(real ? month.net_monthly_real_ron ?? month.net_monthly_ron : month.net_monthly_ron)}</td>
-                    <td className="num px-2 py-1">{percent(month.effective_tax_rate)}</td>
-                    <td className="px-2 py-1">
-                      {month.rules_label} {month.future_rules_assumed ? <Badge>Future rules assumed</Badge> : null}
-                    </td>
-                    <td className="px-2 py-1">{month.fx_source} {month.fx_rate_to_ron}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {groupYears(track.months).map((group) => {
+              const gross = group.months.reduce((sum, month) => sum + month.gross_monthly_ron, 0);
+              const net = group.months.reduce((sum, month) => sum + (real ? month.net_monthly_real_ron ?? month.net_monthly_ron : month.net_monthly_ron), 0);
+              return (
+                <details key={group.year} open className="border-t border-zinc-200 dark:border-zinc-800">
+                  <summary className="cursor-pointer px-3 py-2 text-xs">
+                    {group.year} · gross {money(gross)} · net {money(net)}
+                  </summary>
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-zinc-500">
+                        {["Month", "Gross", "Net", "Effective", "Rules", "FX"].map((heading) => (
+                          <th key={heading} className="px-2 py-1">{heading}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.months.map((month) => (
+                        <tr key={month.month} className="border-t border-zinc-100 dark:border-zinc-800">
+                          <td className="px-2 py-1">{month.month}{month.raise_applied ? " ↑" : ""}</td>
+                          <td className="num px-2 py-1">
+                            <Hint text={`Gross ${money(month.gross_monthly_ron)}. ${month.rules_label}. FX ${month.fx_source} ${month.fx_rate_to_ron}.${month.future_rules_assumed ? " Future rules assumed." : ""}`}>
+                              <span>{money(month.gross_monthly_ron)}</span>
+                            </Hint>
+                          </td>
+                          <td className="num px-2 py-1">
+                            <Hint text={`Net ${money(month.net_monthly_ron)}. Effective ${(month.effective_tax_rate ?? 0) * 100}%.`}>
+                              <span>{money(real ? month.net_monthly_real_ron ?? month.net_monthly_ron : month.net_monthly_ron)}</span>
+                            </Hint>
+                          </td>
+                          <td className="num px-2 py-1">{percent(month.effective_tax_rate)}</td>
+                          <td className="px-2 py-1">{month.rules_label} {month.future_rules_assumed ? <Badge>Future rules assumed</Badge> : null}</td>
+                          <td className="px-2 py-1">{month.fx_source} {month.fx_rate_to_ron}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              );
+            })}
           </details>
         ))}
       </div>
+    </div>
+  );
+}
+
+function monthLabel(start: string, index: number) {
+  const [year, month] = start.slice(0, 7).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + index, 1));
+  return ` (${date.toLocaleString("en", { month: "short", year: "numeric", timeZone: "UTC" })})`;
+}
+
+function groupYears(months: MonthPoint[]) {
+  const groups = new Map<string, MonthPoint[]>();
+  for (const month of months) {
+    const year = month.month.slice(0, 4);
+    groups.set(year, [...(groups.get(year) ?? []), month]);
+  }
+  return [...groups.entries()].map(([year, rows]) => ({ year, months: rows }));
+}
+
+function Adjustments({
+  track,
+  onSave,
+  bonusMonth,
+  setBonusMonth,
+  bonusGross,
+  setBonusGross,
+  oneOffMonth,
+  setOneOffMonth,
+  oneOffGross,
+  setOneOffGross,
+}: {
+  track: TimelineDetail["tracks"][number];
+  onSave: (adjustments: NonNullable<TimelineDetail["tracks"][number]["adjustments"]>) => Promise<void>;
+  bonusMonth: string;
+  setBonusMonth: (value: string) => void;
+  bonusGross: number;
+  setBonusGross: (value: number) => void;
+  oneOffMonth: number;
+  setOneOffMonth: (value: number) => void;
+  oneOffGross: number;
+  setOneOffGross: (value: number) => void;
+}) {
+  const current = track.adjustments ?? {};
+  return (
+    <div className="mt-3 grid gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+      <p className="text-xs font-medium">Recurring adjustments</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="Annual bonus month (1–12)">
+          <Input className="w-24" value={bonusMonth} placeholder={String(current.annual_bonus_month ?? "")} onChange={(event) => setBonusMonth(event.target.value)} />
+        </Field>
+        <Field label="Bonus gross">
+          <Input className="w-28" type="number" value={bonusGross} onChange={(event) => setBonusGross(Number(event.target.value))} />
+        </Field>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            void onSave({
+              ...current,
+              annual_bonus_month: bonusMonth ? Number(bonusMonth) : null,
+              annual_bonus_gross: bonusGross,
+              annual_bonus_currency: "RON",
+              one_offs: current.one_offs ?? [],
+            })
+          }
+        >
+          Save bonus
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="One-off month number">
+          <Input className="w-24" type="number" value={oneOffMonth} onChange={(event) => setOneOffMonth(Number(event.target.value))} />
+        </Field>
+        <Field label="One-off gross">
+          <Input className="w-28" type="number" value={oneOffGross} onChange={(event) => setOneOffGross(Number(event.target.value))} />
+        </Field>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            void onSave({
+              annual_bonus_month: current.annual_bonus_month ?? null,
+              annual_bonus_gross: current.annual_bonus_gross ?? 0,
+              annual_bonus_currency: "RON",
+              one_offs: [...(current.one_offs ?? []), { month_index: Math.max(0, oneOffMonth - 1), gross: oneOffGross, currency: "RON" }],
+            })
+          }
+        >
+          Add one-off
+        </Button>
+      </div>
+      <ul className="text-xs text-zinc-500">
+        {(current.one_offs ?? []).map((item, index) => (
+          <li key={`${item.month_index}-${index}`}>One-off month {item.month_index + 1}: {money(item.gross)}</li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -85,6 +85,26 @@ export function toComparedItem(input: {
     fx_rate_to_ron: offerRate,
     fx_date: input.result.fx.date,
     fx_source: input.result.fx.source,
+    formulas: formulaMap(regime, input.result),
+  };
+}
+
+function formulaMap(regime: RegimeResult, result: CalculationResult): Record<string, string> {
+  const byKey = Object.fromEntries(regime.lines.map((line) => [line.key, line.formula]));
+  const join = (...keys: string[]) => keys.map((key) => byKey[key]).filter(Boolean).join("\n");
+  return {
+    original: result.periods.formulas.join("\n"),
+    gross_monthly: byKey.gross ?? byKey.revenue ?? "",
+    taxes: join("income_tax", "dividend_tax", "micro_tax", "profit_tax", "director_tax"),
+    contributions: join("cas", "cass", "dividend_cass", "director_cas", "director_cass"),
+    net_monthly: byKey.net_yearly ?? byKey.net ?? "",
+    net_yearly: byKey.net_yearly ?? byKey.net ?? "",
+    employer: byKey.employer_cost ?? byKey.director_cam ?? "No employer cost for this regime.",
+    effective:
+      regime.effective_tax_rate == null
+        ? ""
+        : `Effective rate = (taxes + contributions) / gross revenue.`,
+    fx: `1 ${result.fx.currency} = ${result.fx.rate_to_ron} RON (${result.fx.source}${result.fx.date ? `, ${result.fx.date}` : ""}).`,
   };
 }
 

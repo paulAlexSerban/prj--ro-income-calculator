@@ -18,12 +18,17 @@ export function FormulaList({ lines }: { lines: BreakdownLine[] }) {
   );
 }
 
-export function RegimeCard({ regime }: { regime: RegimeResult }) {
+const GENERIC_WARNING = "This result uses tax rules that are not marked verified";
+
+export function RegimeCard({ regime, open = false }: { regime: RegimeResult; open?: boolean }) {
+  const warnings = regime.warnings.filter((warning) => !warning.startsWith(GENERIC_WARNING));
   return (
     <article className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h3 className="font-medium">{regime.label}</h3>
-        {regime.best ? <Badge className="border-teal-700 text-teal-700">Best net</Badge> : null}
+        {regime.best ? (
+          <Badge className="border-teal-700 text-teal-800 dark:text-teal-300">Best net ★</Badge>
+        ) : null}
       </div>
       <dl className="mb-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
         <div>
@@ -43,14 +48,19 @@ export function RegimeCard({ regime }: { regime: RegimeResult }) {
           <dd className="num">{regime.employer_cost_monthly_ron == null ? "—" : money(regime.employer_cost_monthly_ron)}</dd>
         </div>
       </dl>
-      {regime.warnings.length ? (
-        <ul className="mb-3 grid gap-1 text-xs text-amber-700 dark:text-amber-400">
-          {regime.warnings.map((warning) => (
+      {warnings.length ? (
+        <ul className="mb-3 grid gap-1 text-xs text-amber-800 dark:text-amber-300">
+          {warnings.map((warning) => (
             <li key={warning}>{warning}</li>
           ))}
         </ul>
       ) : null}
-      <FormulaList lines={regime.lines} />
+      <details open={open}>
+        <summary className="cursor-pointer text-sm text-teal-800 dark:text-teal-300">How this was calculated</summary>
+        <div className="mt-3">
+          <FormulaList lines={regime.lines} />
+        </div>
+      </details>
     </article>
   );
 }

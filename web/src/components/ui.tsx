@@ -1,19 +1,26 @@
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as SwitchPrimitive from "@radix-ui/react-switch";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
+import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { useEffect, useState } from "react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+const focusRing =
+  "outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-zinc-950";
+
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600",
+  `inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${focusRing}`,
   {
     variants: {
       variant: {
         default: "bg-teal-700 text-white hover:bg-teal-800",
         secondary: "bg-zinc-200 text-zinc-900 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700",
         ghost: "hover:bg-zinc-200/70 dark:hover:bg-zinc-800",
-        outline: "border border-zinc-300 bg-transparent hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900",
+        outline: "border border-zinc-300 bg-white hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800",
+        destructive: "bg-rose-700 text-white hover:bg-rose-800",
       },
       size: {
         default: "h-9 px-3",
@@ -62,7 +69,7 @@ export function Input(props: React.ComponentProps<"input">) {
     <input
       {...props}
       className={cn(
-        "h-9 w-full rounded-md border border-zinc-300 bg-transparent px-2 text-sm outline-none focus:border-teal-600 dark:border-zinc-700",
+        `h-9 w-full rounded-md border border-zinc-300 bg-white px-2 text-sm text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 ${focusRing}`,
         props.className,
       )}
     />
@@ -74,7 +81,7 @@ export function Select(props: React.ComponentProps<"select">) {
     <select
       {...props}
       className={cn(
-        "h-9 w-full rounded-md border border-zinc-300 bg-transparent px-2 text-sm outline-none focus:border-teal-600 dark:border-zinc-700",
+        `h-9 w-full rounded-md border border-zinc-300 bg-white px-2 text-sm text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 ${focusRing}`,
         props.className,
       )}
     />
@@ -86,7 +93,7 @@ export function Textarea(props: React.ComponentProps<"textarea">) {
     <textarea
       {...props}
       className={cn(
-        "min-h-20 w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-teal-600 dark:border-zinc-700",
+        `min-h-20 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 ${focusRing}`,
         props.className,
       )}
     />
@@ -122,11 +129,117 @@ export const TabsTrigger = ({ className, ...props }: React.ComponentProps<typeof
 );
 export const TabsContent = TabsPrimitive.Content;
 
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="grid gap-1 text-sm">
       <span className="text-zinc-500">{label}</span>
       {children}
+      {hint ? <span className="text-xs text-rose-600">{hint}</span> : null}
     </label>
+  );
+}
+
+export const TooltipProvider = TooltipPrimitive.Provider;
+
+export function Hint({ text, children }: { text?: string; children: React.ReactNode }) {
+  if (!text) return <>{children}</>;
+  return (
+    <TooltipPrimitive.Root>
+      <TooltipPrimitive.Trigger asChild>
+        <span className="cursor-help underline decoration-dotted underline-offset-4">{children}</span>
+      </TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content className="z-50 max-w-sm whitespace-pre-wrap rounded-md bg-zinc-900 px-2 py-1.5 text-xs leading-relaxed text-white shadow-lg">
+          {text}
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
+  );
+}
+
+export function ConfirmButton({
+  title,
+  body,
+  confirmLabel = "Confirm",
+  destructive = false,
+  onConfirm,
+  children,
+}: {
+  title: string;
+  body: string;
+  confirmLabel?: string;
+  destructive?: boolean;
+  onConfirm: () => void | Promise<void>;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
+      <DialogPrimitive.Trigger asChild>{children}</DialogPrimitive.Trigger>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40" />
+        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 w-[min(24rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <DialogPrimitive.Title className="font-medium">{title}</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="mt-1 text-sm text-zinc-500">{body}</DialogPrimitive.Description>
+          <div className="mt-4 flex justify-end gap-2">
+            <DialogPrimitive.Close asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogPrimitive.Close>
+            <Button
+              variant={destructive ? "destructive" : "default"}
+              onClick={() => {
+                void Promise.resolve(onConfirm()).finally(() => setOpen(false));
+              }}
+            >
+              {confirmLabel}
+            </Button>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
+export function NumberField({
+  label,
+  value,
+  onChange,
+  min = 0,
+  step = "any",
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  step?: string;
+}) {
+  const [text, setText] = useState(String(value));
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => setText(String(value)), [value]);
+  return (
+    <Field label={label} hint={error ?? undefined}>
+      <Input
+        inputMode="decimal"
+        step={step}
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          setError(null);
+        }}
+        onBlur={() => {
+          if (text.trim() === "") {
+            setError("Enter a number");
+            return;
+          }
+          const next = Number(text);
+          if (!Number.isFinite(next) || next < min) {
+            setError(min > 0 ? `Must be at least ${min}` : "Enter a valid number");
+            return;
+          }
+          setError(null);
+          onChange(next);
+        }}
+      />
+    </Field>
   );
 }

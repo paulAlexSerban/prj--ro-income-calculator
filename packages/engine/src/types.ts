@@ -284,6 +284,8 @@ export type ComparedItem = {
   fx_rate_to_ron: number;
   fx_date: string | null;
   fx_source: string;
+  /** Formula text for dashboard tooltips, keyed by metric. */
+  formulas: Record<string, string>;
 };
 
 export type Growth = {

@@ -27,4 +27,8 @@ body {
     background: white;
     color: black;
   }
+  main {
+    max-width: none;
+    padding: 0;
+  }
 }

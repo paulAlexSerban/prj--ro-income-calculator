@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge, Button, Card, Field, Input, Select, Switch, Textarea } from "@/components/ui";
+import { Badge, Button, Card, ConfirmButton, Field, Input, Select, Switch, Textarea } from "@/components/ui";
+import { useToast } from "@/lib/toast";
 import { api } from "@/lib/api";
 
 type Settings = {
@@ -30,6 +31,7 @@ export function SettingsPage() {
   const settings = useQuery({ queryKey: ["settings"], queryFn: () => api<Settings>("/api/settings") });
   const rules = useQuery({ queryKey: ["tax-rules"], queryFn: () => api<TaxRule[]>("/api/tax-rules") });
   const fx = useQuery({ queryKey: ["fx"], queryFn: () => api<FxRow[]>("/api/fx?limit=8") });
+  const toast = useToast();
   const [message, setMessage] = useState<string | null>(null);
 
   async function saveSettings(partial: Partial<Settings>) {
@@ -50,6 +52,15 @@ export function SettingsPage() {
       body: JSON.stringify({ value, note: rule.note, verified: rule.verified }),
     });
     await client.invalidateQueries({ queryKey: ["tax-rules"] });
+    toast.push(`Saved ${rule.key}`);
+  }
+
+  async function verifySection(section: TaxRule[]) {
+    for (const rule of section.filter((item) => !item.verified)) {
+      await api(`/api/tax-rules/${rule.id}`, { method: "PATCH", body: JSON.stringify({ verified: true }) });
+    }
+    await client.invalidateQueries({ queryKey: ["tax-rules"] });
+    toast.push("Marked the section verified");
   }
 
   if (!settings.data) return <p className="text-sm text-zinc-500">Loading…</p>;
@@ -58,9 +69,8 @@ export function SettingsPage() {
   return (
     <div className="grid gap-4">
       <h1 className="text-xl font-semibold">Settings</h1>
-      <p className="text-sm text-zinc-500">
-        Every seeded tax figure is unverified. Edit the value, then mark it verified after you check ANAF / Codul Fiscal.
-        The calculator never hard-codes these rates.
+      <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+        {(rules.data ?? []).filter((rule) => !rule.verified).length} rules are unverified. The calculator reads these values and does not hard-code rates. Check each one against ANAF / Codul Fiscal before you rely on it.
       </p>
       {message ? <p className="text-sm text-teal-700">{message}</p> : null}
       <Card className="grid gap-3 p-4 md:grid-cols-3">
@@ -138,29 +148,90 @@ export function SettingsPage() {
         </ul>
       </Card>
       <InflationEditor />
-      <div className="grid gap-3">
-        {(rules.data ?? []).map((rule) => (
-          <RuleEditor key={rule.id} rule={rule} onSave={saveRule} />
-        ))}
-      </div>
+      {GROUPS.map((group) => {
+        const section = (rules.data ?? []).filter((rule) => group.keys.includes(rule.key));
+        if (!section.length) return null;
+        const open = section.some((rule) => !rule.verified);
+        return (
+          <details key={group.id} open={open} className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <summary className="cursor-pointer px-4 py-3 font-medium">
+              {group.title}
+              <span className="ml-2 text-sm font-normal text-zinc-500">
+                {section.filter((rule) => !rule.verified).length} unverified
+              </span>
+            </summary>
+            <div className="grid gap-3 px-4 pb-4">
+              <ConfirmButton
+                title={`Verify every rule in ${group.title}?`}
+                body="Only do this after you have checked each value against ANAF / Codul Fiscal."
+                confirmLabel="Mark verified"
+                onConfirm={() => verifySection(section)}
+              >
+                <Button variant="outline" size="sm">Verify all in this section</Button>
+              </ConfirmButton>
+              {section.map((rule) => (
+                <RuleEditor key={rule.id} rule={rule} onSave={saveRule} />
+              ))}
+            </div>
+          </details>
+        );
+      })}
     </div>
   );
 }
 
+const GROUPS: { id: string; title: string; keys: string[] }[] = [
+  { id: "rates", title: "Rates", keys: ["income_tax_rate", "cas_rate", "cass_rate", "cam_rate", "dividend_tax_rate", "profit_tax_rate"] },
+  { id: "wage", title: "Minimum wage", keys: ["minimum_gross_wage"] },
+  { id: "tiers", title: "CAS / CASS tiers", keys: ["cas_tiers", "cass_tiers", "cas_cap_min_wages", "cass_cap_min_wages"] },
+  { id: "micro", title: "Micro-enterprise", keys: ["micro_tax_rate", "micro_turnover_threshold_eur", "micro_employee_required", "micro_exit_lock_years"] },
+  { id: "deduction", title: "Deduction and allowances", keys: ["personal_deduction", "min_wage_tax_free_allowance"] },
+  { id: "optional", title: "Optional regimes", keys: ["director_salary", "pfa_ip_enabled", "pfa_ip_flat_deduction_rate"] },
+];
+
 function RuleEditor({ rule, onSave }: { rule: TaxRule; onSave: (rule: TaxRule, value: string) => Promise<void> }) {
-  const [value, setValue] = useState(typeof rule.value === "string" ? rule.value : JSON.stringify(rule.value));
+  const initial = typeof rule.value === "string" ? rule.value : JSON.stringify(rule.value);
+  const [value, setValue] = useState(initial);
   const [note, setNote] = useState(rule.note);
   const [verified, setVerified] = useState(rule.verified);
+  const [raw, setRaw] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dirty = value !== initial || note !== rule.note || verified !== rule.verified;
+  const tiers = rule.key === "cas_tiers" || rule.key === "cass_tiers";
+  const deduction = rule.key === "personal_deduction" && isDeduction(rule.value);
   return (
     <Card className="grid gap-2 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{rule.key}</span>
-        <Badge>{rule.effective_from}</Badge>
-        <Badge>{rule.tax_year}</Badge>
-        {rule.verified ? <Badge className="border-teal-700 text-teal-700">Verified</Badge> : <Badge>Verify against ANAF / Codul Fiscal</Badge>}
+        <Badge>{String(rule.effective_from).slice(0, 10)}</Badge>
+        {rule.verified ? <Badge className="border-teal-700 text-teal-800 dark:text-teal-300">Verified</Badge> : <Badge className="border-amber-500 text-amber-800 dark:text-amber-300">Unverified</Badge>}
+        {dirty ? <Badge>Unsaved</Badge> : null}
+        {saved ? <span className="text-xs text-teal-700">Saved</span> : null}
       </div>
-      <Textarea value={value} onChange={(event) => setValue(event.target.value)} />
-      <Textarea value={note} onChange={(event) => setNote(event.target.value)} />
+      {deduction && !raw ? <DeductionForm value={value} onChange={setValue} /> : null}
+      {tiers && !raw ? (
+        <Field label="Tiers, minimum wages, comma-separated">
+          <Input
+            value={parseTiers(value).join(", ")}
+            onChange={(event) => {
+              const nums = event.target.value.split(",").map((part) => Number(part.trim())).filter((n) => Number.isFinite(n));
+              setValue(JSON.stringify(nums));
+            }}
+          />
+        </Field>
+      ) : null}
+      {(!deduction && !tiers) || raw ? (
+        <Textarea value={value} onChange={(event) => setValue(event.target.value)} aria-label={`${rule.key} value`} />
+      ) : null}
+      {(deduction || tiers) ? (
+        <label className="flex items-center gap-2 text-xs text-zinc-500">
+          <Switch checked={raw} onCheckedChange={setRaw} />
+          Edit raw JSON
+        </label>
+      ) : null}
+      <Textarea value={note} onChange={(event) => setNote(event.target.value)} aria-label={`${rule.key} note`} />
+      {error ? <p className="text-xs text-rose-700">{error}</p> : null}
       <label className="flex items-center gap-2 text-sm">
         <Switch checked={verified} onCheckedChange={setVerified} />
         I verified this against ANAF / Codul Fiscal
@@ -168,11 +239,104 @@ function RuleEditor({ rule, onSave }: { rule: TaxRule; onSave: (rule: TaxRule, v
       <Button
         variant="outline"
         className="w-fit"
-        onClick={() => void onSave({ ...rule, note, verified }, value)}
+        onClick={() => {
+          const parsed = parseValue(value);
+          if (parsed.error) {
+            setError(parsed.error);
+            return;
+          }
+          setError(null);
+          void onSave({ ...rule, note, verified }, value).then(() => {
+            setSaved(true);
+            window.setTimeout(() => setSaved(false), 2000);
+          });
+        }}
       >
         Save rule
       </Button>
     </Card>
+  );
+}
+
+function parseValue(text: string): { error?: string } {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      JSON.parse(trimmed);
+    } catch {
+      return { error: "This value is not valid JSON." };
+    }
+  }
+  return {};
+}
+
+function parseTiers(text: string): number[] {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
+function isDeduction(value: unknown): value is { enabled: boolean; bands: { gross_up_to: number | null; base_deduction: number; per_dependant: number }[] } {
+  return Boolean(value && typeof value === "object" && "bands" in value);
+}
+
+function DeductionForm({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  let parsed: { enabled: boolean; bands: { gross_up_to: number | null; base_deduction: number; per_dependant: number }[] };
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return <p className="text-xs text-rose-700">Switch to raw JSON to fix this value.</p>;
+  }
+  function write(next: typeof parsed) {
+    onChange(JSON.stringify(next));
+  }
+  return (
+    <div className="grid gap-2">
+      <label className="flex items-center gap-2 text-sm">
+        <Switch checked={Boolean(parsed.enabled)} onCheckedChange={(enabled) => write({ ...parsed, enabled })} />
+        Deduction enabled
+      </label>
+      {parsed.bands.map((band, index) => (
+        <div key={index} className="grid grid-cols-3 gap-2">
+          <Field label="Gross up to">
+            <Input
+              inputMode="decimal"
+              value={band.gross_up_to ?? ""}
+              onChange={(event) => {
+                const bands = [...parsed.bands];
+                bands[index] = { ...band, gross_up_to: event.target.value === "" ? null : Number(event.target.value) };
+                write({ ...parsed, bands });
+              }}
+            />
+          </Field>
+          <Field label="Base">
+            <Input
+              inputMode="decimal"
+              value={band.base_deduction}
+              onChange={(event) => {
+                const bands = [...parsed.bands];
+                bands[index] = { ...band, base_deduction: Number(event.target.value) };
+                write({ ...parsed, bands });
+              }}
+            />
+          </Field>
+          <Field label="Per dependant">
+            <Input
+              inputMode="decimal"
+              value={band.per_dependant}
+              onChange={(event) => {
+                const bands = [...parsed.bands];
+                bands[index] = { ...band, per_dependant: Number(event.target.value) };
+                write({ ...parsed, bands });
+              }}
+            />
+          </Field>
+        </div>
+      ))}
+    </div>
   );
 }
 

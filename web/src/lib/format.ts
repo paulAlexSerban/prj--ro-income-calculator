@@ -7,6 +7,25 @@ export function money(value: number | null | undefined, currency = "RON"): strin
   }).format(value);
 }
 
+/** Whole units above 1,000. Full precision stays in tooltips via `money`. */
+export function moneyCompact(value: number | null | undefined, currency = "RON"): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  const digits = Math.abs(value) >= 1000 ? 0 : 2;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
+export function daysSince(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const then = Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(then)) return null;
+  return Math.floor((Date.now() - then) / 86_400_000);
+}
+
 export function percent(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   const sign = value > 0 ? "+" : "";
