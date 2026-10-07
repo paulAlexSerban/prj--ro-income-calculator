@@ -1,0 +1,20 @@
+{
+  "name": "offer-compare-ro",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Salary and job-offer comparison for Romania (CIM and B2B).",
+  "workspaces": [
+    "packages/engine",
+    "api",
+    "web"
+  ],
+  "scripts": {
+    "test": "npm test -w @offer-compare/engine",
+    "dev:api": "npm run dev -w api",
+    "dev:web": "npm run dev -w web",
+    "migrate": "npm run migrate -w api"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

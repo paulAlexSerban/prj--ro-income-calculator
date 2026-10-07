@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+body {
+  @apply bg-zinc-50 text-zinc-950 antialiased dark:bg-zinc-950 dark:text-zinc-50;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+}

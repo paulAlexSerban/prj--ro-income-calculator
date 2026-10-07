@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-offercompare}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-offercompare}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    command: ["npx", "tsx", "api/src/migrate.ts"]
+    environment:
+      DATABASE_URL_ADMIN: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-offercompare}
+      APP_DB_USER: ${APP_DB_USER:-app_user}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app_password}
+      POSTGRES_DB: ${POSTGRES_DB:-offercompare}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://${APP_DB_USER:-app_user}:${APP_DB_PASSWORD:-app_password}@db:5432/${POSTGRES_DB:-offercompare}
+      DATABASE_URL_ADMIN: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-offercompare}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-30}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      PORT: 3000
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
