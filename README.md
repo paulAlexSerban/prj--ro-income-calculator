@@ -2,6 +2,8 @@
 
 Salary and job-offer comparison for Romania. Normalize CIM (employment) and B2B offers to net monthly and yearly RON, compare growth, and project income over a timeline.
 
+Design notes, requirements, and decision records are in [_docs](_docs/README.md).
+
 Estimates only, not tax advice. Seeded 2026 tax figures are unverified until you check them against ANAF / Codul Fiscal and mark them verified in Settings.
 
 ## Stack
