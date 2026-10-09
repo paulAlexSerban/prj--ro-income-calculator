@@ -425,6 +425,13 @@ export async function buildApp() {
     return db.selectFrom("inflation_assumptions").selectAll().where("year", "=", yearNum).executeTakeFirst();
   });
 
+  app.delete("/api/inflation/:year", async (request) => {
+    await requireUser(request);
+    const { year } = request.params as { year: string };
+    await db.deleteFrom("inflation_assumptions").where("year", "=", Number(year)).execute();
+    return { ok: true };
+  });
+
   app.get("/api/fx", async (request) => {
     await requireUser(request);
     const query = request.query as { limit?: string };

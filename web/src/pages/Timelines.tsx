@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Badge, Button, Card, ConfirmButton, Field, Hint, Input, Select, Switch } from "@/components/ui";
+import { Badge, Button, Card, ConfirmButton, Field, Hint, InfoTip, Input, Select, Switch } from "@/components/ui";
 import { api } from "@/lib/api";
 import { downloadCsv, money, percent } from "@/lib/format";
 import type { OfferRecord } from "@/lib/offers";
@@ -94,13 +94,13 @@ export function TimelinesPage() {
     <div className="grid gap-4">
       <h1 className="text-xl font-semibold">Timelines</h1>
       <Card className="grid gap-3 p-4 md:grid-cols-4">
-        <Field label="Label">
+        <Field label="Label" info="A name for this projection, for example Stay versus Offer B.">
           <Input value={label} onChange={(event) => setLabel(event.target.value)} />
         </Field>
-        <Field label="Start">
+        <Field label="Start" info="The first month of the projection. Raises and one-offs count from this month.">
           <Input type="date" value={start} onChange={(event) => setStart(event.target.value)} />
         </Field>
-        <Field label="Horizon (months)">
+        <Field label="Horizon (months)" info="How many months to simulate. 36 is three years. Each month runs the same tax engine.">
           <Input type="number" value={horizon} onChange={(event) => setHorizon(Number(event.target.value))} />
         </Field>
         <div className="flex items-end">
@@ -275,7 +275,7 @@ export function TimelineDetailPage() {
         </div>
       </div>
       <Card className="grid gap-3 p-4 md:grid-cols-3">
-        <Field label="FX drift % / year (future months)">
+        <Field label="FX drift % / year (future months)" info="Past months use the stored rate. Future months move that rate by this percent per year. Zero keeps the last known rate.">
           <Input
             type="number"
             defaultValue={data.fx_drift_percent}
@@ -297,14 +297,16 @@ export function TimelineDetailPage() {
             }
           />
           Use inflation series for real values
+          <InfoTip text="Divides later months by cumulative inflation from Settings, so you can compare purchasing power with the nominal paycheck." />
         </label>
         <label className="flex items-end gap-2 text-sm">
           <Switch checked={real} onCheckedChange={setReal} disabled={!data.use_inflation} />
           Chart real (inflation-adjusted) net
+          <InfoTip text="Switches the net line and the yearly table to inflation-adjusted values. Turn on the inflation series first." />
         </label>
       </Card>
       <Card className="grid gap-3 p-4 md:grid-cols-4">
-        <Field label="Track from offer">
+        <Field label="Track from offer" info="A track is one offer projected over the horizon. Add several to compare staying with taking an offer.">
           <Select value={offerId} onChange={(event) => setOfferId(event.target.value)}>
             <option value="">Choose offer</option>
             {(offers.data ?? []).map((offer) => (
@@ -312,10 +314,10 @@ export function TimelineDetailPage() {
             ))}
           </Select>
         </Field>
-        <Field label="Track label">
+        <Field label="Track label" info="The name on the chart. Defaults to the offer name if you leave it blank.">
           <Input value={trackLabel} onChange={(event) => setTrackLabel(event.target.value)} />
         </Field>
-        <Field label="Regime">
+        <Field label="Regime" info="Which tax regime feeds this track. Best net picks the highest personal net each time the offer is B2B.">
           <Select value={regime} onChange={(event) => setRegime(event.target.value)}>
             <option value="best">Best net</option>
             <option value="employment">Employment</option>
@@ -325,7 +327,7 @@ export function TimelineDetailPage() {
             <option value="srl_profit">SRL profit</option>
           </Select>
         </Field>
-        <Field label="Color">
+        <Field label="Color" info="The line color for this track on the charts.">
           <Input type="color" value={trackColor} onChange={(event) => setTrackColor(event.target.value)} aria-label="Track color" />
         </Field>
         <div className="flex items-end">
@@ -375,7 +377,7 @@ export function TimelineDetailPage() {
         ))}
       </div>
       <Card className="grid gap-3 p-4 md:grid-cols-6">
-        <Field label="Raise on track">
+        <Field label="Raise on track" info="Applies from the chosen month onward. Later months use the raised amount.">
           <Select value={raiseTrack} onChange={(event) => setRaiseTrack(event.target.value)}>
             <option value="">Track</option>
             {data.tracks.map((track) => (
@@ -383,7 +385,7 @@ export function TimelineDetailPage() {
             ))}
           </Select>
         </Field>
-        <Field label="When">
+        <Field label="When" info="Month number counts from the timeline start (1 is the first month). Absolute month is a calendar month, converted to that index.">
           <Select value={dateMode} onChange={(event) => setDateMode(event.target.value as "index" | "date")}>
             <option value="index">Month number</option>
             <option value="date">Absolute month</option>
@@ -398,22 +400,22 @@ export function TimelineDetailPage() {
             <Input type="month" value={raiseDate} onChange={(event) => setRaiseDate(event.target.value)} />
           </Field>
         )}
-        <Field label="Kind">
+        <Field label="Kind" info="Percent increases the current amount. New amount replaces it with the value you type.">
           <Select value={raiseKind} onChange={(event) => setRaiseKind(event.target.value as "percent" | "flat")}>
             <option value="percent">Percent</option>
             <option value="flat">New amount</option>
           </Select>
         </Field>
-        <Field label="Base">
+        <Field label="Base" info="Gross scales the offered amount. Net solves a new gross so take-home rises by that percent.">
           <Select value={raiseBase} onChange={(event) => setRaiseBase(event.target.value as "gross" | "net")}>
             <option value="gross">Gross</option>
             <option value="net">Net</option>
           </Select>
         </Field>
-        <Field label="Value">
+        <Field label="Value" info="For a percent, 10 means +10%. For a new amount, this is the new gross or net figure.">
           <Input type="number" value={raiseValue} onChange={(event) => setRaiseValue(Number(event.target.value))} />
         </Field>
-        <Field label="Contract change">
+        <Field label="Contract change" info="Optional. From this month the track is taxed as employment or B2B instead of the original contract.">
           <Select value={contractChange} onChange={(event) => setContractChange(event.target.value)}>
             <option value="">None</option>
             <option value="EMPLOYMENT">Switch to CIM</option>
@@ -424,6 +426,7 @@ export function TimelineDetailPage() {
           <label className="flex items-center gap-2 text-xs">
             <Switch checked={compounding} onCheckedChange={setCompounding} />
             Compound
+            <InfoTip text="On: each percent raise stacks on the previous one. Off: the percent is applied to the original amount." />
           </label>
           <Button disabled={!raiseTrack} onClick={() => void addRaise()}>Add raise</Button>
         </div>
@@ -442,7 +445,7 @@ export function TimelineDetailPage() {
         ))}
       </div>
       <Card className="grid gap-2 p-4 md:grid-cols-2">
-        <Field label="Break-even: track A">
+        <Field label="Break-even: track A" info="The baseline, often staying in the current job. Break-even is when track B's cumulative net catches this one.">
           <Select value={pairA} onChange={(event) => setPairA(event.target.value)}>
             <option value="">A</option>
             {data.tracks.map((track) => (
@@ -450,7 +453,7 @@ export function TimelineDetailPage() {
             ))}
           </Select>
         </Field>
-        <Field label="Track B (when it overtakes A)">
+        <Field label="Track B (when it overtakes A)" info="The alternative. The chart marks the first month its running total of net pay is at least track A's.">
           <Select value={pairB} onChange={(event) => setPairB(event.target.value)}>
             <option value="">B</option>
             {data.tracks.map((track) => (
@@ -628,12 +631,37 @@ function Adjustments({
   const current = track.adjustments ?? {};
   return (
     <div className="mt-3 grid gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-      <p className="text-xs font-medium">Recurring adjustments</p>
+      <p className="flex items-center gap-1 text-xs font-medium">
+        Recurring adjustments
+        <InfoTip text="These sit on top of the offer. An annual bonus repeats every year in that calendar month. A one-off is taxed once, in the month you pick." />
+      </p>
+      {(current.annual_bonus_month || current.annual_bonus_gross) ? (
+        <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+          <span>Annual bonus: month {current.annual_bonus_month ?? "—"}, {money(current.annual_bonus_gross ?? 0)} gross</span>
+          <ConfirmButton
+            title="Remove the annual bonus?"
+            body="Later months will no longer include this bonus."
+            confirmLabel="Remove"
+            destructive
+            onConfirm={() =>
+              onSave({
+                ...current,
+                annual_bonus_month: null,
+                annual_bonus_gross: 0,
+                annual_bonus_currency: "RON",
+                one_offs: current.one_offs ?? [],
+              })
+            }
+          >
+            <Button type="button" variant="ghost" size="sm">Remove bonus</Button>
+          </ConfirmButton>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="Annual bonus month (1–12)">
+        <Field label="Annual bonus month (1–12)" info="Calendar month, not the timeline month. 12 means every December.">
           <Input className="w-24" value={bonusMonth} placeholder={String(current.annual_bonus_month ?? "")} onChange={(event) => setBonusMonth(event.target.value)} />
         </Field>
-        <Field label="Bonus gross">
+        <Field label="Bonus gross" info="Gross RON added that month and taxed with the same engine. It is not spread across the year.">
           <Input className="w-28" type="number" value={bonusGross} onChange={(event) => setBonusGross(Number(event.target.value))} />
         </Field>
         <Button
@@ -653,10 +681,10 @@ function Adjustments({
         </Button>
       </div>
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="One-off month number">
+        <Field label="One-off month number" info="Timeline month, starting at 1. The bonus is added only in that month.">
           <Input className="w-24" type="number" value={oneOffMonth} onChange={(event) => setOneOffMonth(Number(event.target.value))} />
         </Field>
-        <Field label="One-off gross">
+        <Field label="One-off gross" info="Extra gross in RON for that single month. Delete it from the list if you added it by mistake.">
           <Input className="w-28" type="number" value={oneOffGross} onChange={(event) => setOneOffGross(Number(event.target.value))} />
         </Field>
         <Button
@@ -674,9 +702,27 @@ function Adjustments({
           Add one-off
         </Button>
       </div>
-      <ul className="text-xs text-zinc-500">
+      <ul className="grid gap-1 text-xs text-zinc-500">
         {(current.one_offs ?? []).map((item, index) => (
-          <li key={`${item.month_index}-${index}`}>One-off month {item.month_index + 1}: {money(item.gross)}</li>
+          <li key={`${item.month_index}-${index}`} className="flex items-center justify-between gap-2">
+            <span>One-off month {item.month_index + 1}: {money(item.gross)}</span>
+            <ConfirmButton
+              title="Remove this one-off?"
+              body="That month will be recalculated without this payment."
+              confirmLabel="Remove"
+              destructive
+              onConfirm={() =>
+                onSave({
+                  annual_bonus_month: current.annual_bonus_month ?? null,
+                  annual_bonus_gross: current.annual_bonus_gross ?? 0,
+                  annual_bonus_currency: current.annual_bonus_currency ?? "RON",
+                  one_offs: (current.one_offs ?? []).filter((_, itemIndex) => itemIndex !== index),
+                })
+              }
+            >
+              <Button type="button" variant="ghost" size="sm">Remove</Button>
+            </ConfirmButton>
+          </li>
         ))}
       </ul>
     </div>

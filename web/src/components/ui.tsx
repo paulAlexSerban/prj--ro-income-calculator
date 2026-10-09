@@ -129,13 +129,47 @@ export const TabsTrigger = ({ className, ...props }: React.ComponentProps<typeof
 );
 export const TabsContent = TabsPrimitive.Content;
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+export function InfoTip({ text }: { text: string }) {
   return (
-    <label className="grid gap-1 text-sm">
-      <span className="text-zinc-500">{label}</span>
+    <TooltipPrimitive.Root>
+      <TooltipPrimitive.Trigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-zinc-400 text-[10px] font-semibold leading-none text-zinc-600 hover:border-teal-700 hover:text-teal-800 dark:border-zinc-500 dark:text-zinc-300"
+          aria-label={text}
+        >
+          i
+        </button>
+      </TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content className="z-50 max-w-xs rounded-md bg-zinc-900 px-2 py-1.5 text-xs leading-relaxed text-white shadow-lg">
+          {text}
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
+  );
+}
+
+export function Field({
+  label,
+  hint,
+  info,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  info?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-1 text-sm">
+      <div className="flex items-center gap-1.5 text-zinc-500">
+        <span>{label}</span>
+        {info ? <InfoTip text={info} /> : null}
+      </div>
       {children}
       {hint ? <span className="text-xs text-rose-600">{hint}</span> : null}
-    </label>
+    </div>
   );
 }
 
@@ -206,18 +240,20 @@ export function NumberField({
   onChange,
   min = 0,
   step = "any",
+  info,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   min?: number;
   step?: string;
+  info?: string;
 }) {
   const [text, setText] = useState(String(value));
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setText(String(value)), [value]);
   return (
-    <Field label={label} hint={error ?? undefined}>
+    <Field label={label} info={info} hint={error ?? undefined}>
       <Input
         inputMode="decimal"
         step={step}

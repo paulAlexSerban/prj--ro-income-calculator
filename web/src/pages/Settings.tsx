@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge, Button, Card, ConfirmButton, Field, Input, Select, Switch, Textarea } from "@/components/ui";
+import { Badge, Button, Card, ConfirmButton, Field, InfoTip, Input, Select, Switch, Textarea } from "@/components/ui";
 import { useToast } from "@/lib/toast";
 import { api } from "@/lib/api";
 
@@ -74,7 +74,7 @@ export function SettingsPage() {
       </p>
       {message ? <p className="text-sm text-teal-700">{message}</p> : null}
       <Card className="grid gap-3 p-4 md:grid-cols-3">
-        <Field label="Display currency">
+        <Field label="Display currency" info="Converts comparison and timeline totals into this currency. Tax is still calculated in RON.">
           <Select
             value={data.display_currency}
             onChange={(event) => void saveSettings({ display_currency: event.target.value as Settings["display_currency"] })}
@@ -84,41 +84,55 @@ export function SettingsPage() {
             <option>USD</option>
           </Select>
         </Field>
-        <Field label="Default hours / day">
+        <Field label="Default hours / day" info="Starting value for a new offer. Each offer can override it.">
           <Input type="number" defaultValue={data.hours_per_day} onBlur={(event) => void saveSettings({ hours_per_day: Number(event.target.value) })} />
         </Field>
-        <Field label="Default working days / month">
+        <Field label="Default working days / month" info="Used to turn a daily rate into a month. Employment yearly pay is that month times 12.">
           <Input type="number" defaultValue={data.working_days_per_month} onBlur={(event) => void saveSettings({ working_days_per_month: Number(event.target.value) })} />
         </Field>
-        <Field label="Default B2B billable days / year">
+        <Field label="Default B2B billable days / year" info="B2B yearly revenue uses this instead of 12 full months, so unpaid leave is included.">
           <Input type="number" defaultValue={data.billable_days_per_year} onBlur={(event) => void saveSettings({ billable_days_per_year: Number(event.target.value) })} />
         </Field>
-        <Field label="Global EUR override (RON per EUR)">
-          <Input
-            type="number"
-            defaultValue={data.fx_override?.EUR ?? ""}
-            onBlur={(event) =>
-              void saveSettings({
-                fx_override: { ...data.fx_override, EUR: event.target.value ? Number(event.target.value) : undefined },
-              })
-            }
-          />
+        <Field label="Global EUR override (RON per EUR)" info="Used when an offer has no rate of its own. Clear it to go back to the stored National Bank rate.">
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              defaultValue={data.fx_override?.EUR ?? ""}
+              onBlur={(event) =>
+                void saveSettings({
+                  fx_override: event.target.value
+                    ? { ...data.fx_override, EUR: Number(event.target.value) }
+                    : withoutOverride(data.fx_override, "EUR"),
+                })
+              }
+            />
+            <Button type="button" variant="ghost" size="sm" disabled={data.fx_override?.EUR == null} onClick={() => void saveSettings({ fx_override: withoutOverride(data.fx_override, "EUR") })}>
+              Clear
+            </Button>
+          </div>
         </Field>
-        <Field label="Global USD override (RON per USD)">
-          <Input
-            type="number"
-            defaultValue={data.fx_override?.USD ?? ""}
-            onBlur={(event) =>
-              void saveSettings({
-                fx_override: { ...data.fx_override, USD: event.target.value ? Number(event.target.value) : undefined },
-              })
-            }
-          />
+        <Field label="Global USD override (RON per USD)" info="Same as the EUR override, for US dollar offers.">
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              defaultValue={data.fx_override?.USD ?? ""}
+              onBlur={(event) =>
+                void saveSettings({
+                  fx_override: event.target.value
+                    ? { ...data.fx_override, USD: Number(event.target.value) }
+                    : withoutOverride(data.fx_override, "USD"),
+                })
+              }
+            />
+            <Button type="button" variant="ghost" size="sm" disabled={data.fx_override?.USD == null} onClick={() => void saveSettings({ fx_override: withoutOverride(data.fx_override, "USD") })}>
+              Clear
+            </Button>
+          </div>
         </Field>
-        <Field label="Default annual FX drift %">
+        <Field label="Default annual FX drift %" info="Default yearly change applied to future timeline months. Zero keeps the last known rate.">
           <Input type="number" defaultValue={data.fx_drift_percent} onBlur={(event) => void saveSettings({ fx_drift_percent: Number(event.target.value) })} />
         </Field>
-        <Field label="Fallback inflation % (if a year is missing)">
+        <Field label="Fallback inflation % (if a year is missing)" info="Used for a timeline year that has no row in the inflation list below.">
           <Input type="number" defaultValue={data.inflation_rate_percent} onBlur={(event) => void saveSettings({ inflation_rate_percent: Number(event.target.value) })} />
         </Field>
       </Card>
@@ -340,6 +354,15 @@ function DeductionForm({ value, onChange }: { value: string; onChange: (next: st
   );
 }
 
+function withoutOverride(
+  override: { EUR?: number; USD?: number } | null | undefined,
+  currency: "EUR" | "USD",
+) {
+  const next = { ...(override ?? {}) };
+  delete next[currency];
+  return next.EUR == null && next.USD == null ? null : next;
+}
+
 function InflationEditor() {
   const client = useQueryClient();
   const rows = useQuery({
@@ -350,10 +373,27 @@ function InflationEditor() {
   const [rate, setRate] = useState(0);
   return (
     <Card className="grid gap-3 p-4">
-      <h2 className="font-medium">Inflation assumptions</h2>
-      <ul className="text-sm text-zinc-500">
+      <h2 className="flex items-center gap-1 font-medium">
+        Inflation assumptions
+        <InfoTip text="Annual percent used when a timeline is set to inflation-adjusted values. Remove a year to fall back to the default percent." />
+      </h2>
+      <ul className="grid gap-1 text-sm text-zinc-500">
         {(rows.data ?? []).map((row) => (
-          <li key={row.year}>{row.year}: {row.annual_rate_percent}% {row.note}</li>
+          <li key={row.year} className="flex items-center justify-between gap-2">
+            <span>{row.year}: {row.annual_rate_percent}% {row.note}</span>
+            <ConfirmButton
+              title={`Remove inflation for ${row.year}?`}
+              body="Timelines will use the fallback inflation percent for that year."
+              confirmLabel="Remove"
+              destructive
+              onConfirm={async () => {
+                await api(`/api/inflation/${row.year}`, { method: "DELETE" });
+                await client.invalidateQueries({ queryKey: ["inflation"] });
+              }}
+            >
+              <Button type="button" variant="ghost" size="sm">Remove</Button>
+            </ConfirmButton>
+          </li>
         ))}
       </ul>
       <div className="flex flex-wrap gap-2">
