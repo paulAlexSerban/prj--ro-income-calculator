@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
-import { TooltipProvider } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { ToastProvider } from "./lib/toast";
 import { LoginPage, RegisterPage } from "./pages/AuthPages";
@@ -24,7 +23,6 @@ export function App() {
     <QueryClientProvider client={client}>
       <AuthProvider>
         <ToastProvider>
-        <TooltipProvider delayDuration={200}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -46,7 +44,6 @@ export function App() {
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
-        </TooltipProvider>
         </ToastProvider>
       </AuthProvider>
     </QueryClientProvider>

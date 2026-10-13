@@ -1,5 +1,5 @@
 import type { CalculationResult, Currency, OfferInput } from "@offer-compare/engine";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { RegimeCard } from "@/components/Breakdown";
 import { Badge, Button, Card, Field, InfoTip, Input, NumberField, Select, Switch, Textarea } from "@/components/ui";
@@ -35,7 +35,8 @@ export function OfferEditor({ initial, id }: { initial: OfferInput; id?: string 
     setOffer((current) => ({ ...current, ...partial }));
   }
 
-  async function save() {
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setSaving(true);
     try {
       const saved = await api<{ id: string }>(id ? `/api/offers/${id}` : "/api/offers", {
@@ -57,7 +58,7 @@ export function OfferEditor({ initial, id }: { initial: OfferInput; id?: string 
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
-      <div className="grid gap-4">
+      <form className="grid gap-4" onSubmit={(event) => void save(event)}>
         <h1 className="text-lg font-semibold">{id ? "Edit offer" : "New offer"}</h1>
         <Section title="Basics">
           <Field label="Label (company / role)" info="The name you will see in the comparison table and on charts. Use the company or the role.">
@@ -78,11 +79,13 @@ export function OfferEditor({ initial, id }: { initial: OfferInput; id?: string 
               </Select>
             </Field>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <Switch checked={offer.is_current} onCheckedChange={(checked) => patch({ is_current: checked })} />
-            This is my current income
+          <div className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2">
+              <Switch checked={offer.is_current} onCheckedChange={(checked) => patch({ is_current: checked })} />
+              This is my current income
+            </label>
             <InfoTip text="Only one offer can be current. Growth on the dashboard is measured against it." />
-          </label>
+          </div>
         </Section>
         <Section title="Pay">
           <div className="grid gap-3 sm:grid-cols-3">
@@ -124,16 +127,20 @@ export function OfferEditor({ initial, id }: { initial: OfferInput; id?: string 
             <NumberField label="B2B billable days / year" info="B2B yearly revenue is the day rate times this number, so vacation and unpaid days reduce what you invoice. Default is 220." min={1} value={assumptions.billable_days_per_year} onChange={(billable_days_per_year) => patch({ assumptions: { ...assumptions, billable_days_per_year } })} />
             <NumberField label="Dependants (deducere personală)" info="Used only if you enable the personal deduction in Settings. The seeded table is a placeholder and is off." value={assumptions.dependants} onChange={(dependants) => patch({ assumptions: { ...assumptions, dependants } })} />
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <Switch checked={assumptions.it_exempt} onCheckedChange={(checked) => patch({ assumptions: { ...assumptions, it_exempt: checked } })} />
-            IT-sector income tax exemption. Contributions still apply. Check eligibility.
+          <div className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2">
+              <Switch checked={assumptions.it_exempt} onCheckedChange={(checked) => patch({ assumptions: { ...assumptions, it_exempt: checked } })} />
+              IT-sector income tax exemption. Contributions still apply. Check eligibility.
+            </label>
             <InfoTip text="Sets income tax to 0. CAS and CASS still apply. Eligibility depends on the employer, the activity, and an income cap." />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <Switch checked={assumptions.min_wage_allowance} onCheckedChange={(checked) => patch({ assumptions: { ...assumptions, min_wage_allowance: checked } })} />
-            Minimum-wage tax-free allowance (only if enabled in tax rules)
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2">
+              <Switch checked={assumptions.min_wage_allowance} onCheckedChange={(checked) => patch({ assumptions: { ...assumptions, min_wage_allowance: checked } })} />
+              Minimum-wage tax-free allowance (only if enabled in tax rules)
+            </label>
             <InfoTip text="Subtracts the allowance in Settings from the taxable base. Nothing happens while that rule is disabled." />
-          </label>
+          </div>
         </Section>
         <Section title="Extras">
           <ExtraRow label="Meal vouchers, RON/day (tichete de masă)" info="Added to net only when Count as income is on. Treated as non-taxable until you verify the real cap." amount={extras.meal_vouchers_daily_ron} counted={extras.meal_vouchers_count} onAmount={(meal_vouchers_daily_ron) => patch({ extras: { ...extras, meal_vouchers_daily_ron } })} onCount={(meal_vouchers_count) => patch({ extras: { ...extras, meal_vouchers_count } })} />
@@ -180,23 +187,28 @@ export function OfferEditor({ initial, id }: { initial: OfferInput; id?: string 
                 </Select>
               </Field>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <Switch checked={b2b.pfa_ip} onCheckedChange={(checked) => patch({ b2b: { ...b2b, pfa_ip: checked } })} />
-              Enable the 40% intellectual-property deduction (also requires the tax-rule flag)
+            <div className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2">
+                <Switch checked={b2b.pfa_ip} onCheckedChange={(checked) => patch({ b2b: { ...b2b, pfa_ip: checked } })} />
+                Enable the 40% intellectual-property deduction (also requires the tax-rule flag)
+              </label>
               <InfoTip text="Adds a fifth regime. The flat deduction replaces itemised expenses in the tax base. It stays hidden until Settings enables it too." />
-            </label>
+            </div>
           </Section>
         ) : null}
         <Section title="Notes">
-          <Textarea value={offer.notes} onChange={(event) => patch({ notes: event.target.value })} />
+          <label className="grid gap-1 text-sm text-zinc-500">
+            Notes
+            <Textarea value={offer.notes} onChange={(event) => patch({ notes: event.target.value })} />
+          </label>
         </Section>
         <div className="flex gap-2">
-          <Button onClick={() => void save()} disabled={saving || !offer.label.trim()}>
+          <Button type="submit" disabled={saving || !offer.label.trim()}>
             {saving ? "Saving…" : "Save offer"}
           </Button>
-          <Button variant="outline" onClick={() => navigate(-1)}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={() => navigate(-1)}>Cancel</Button>
         </div>
-      </div>
+      </form>
       <Card className="grid gap-3 p-4 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-auto">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="font-medium">Live preview</h2>
@@ -206,7 +218,10 @@ export function OfferEditor({ initial, id }: { initial: OfferInput; id?: string 
         {error ? <p className="rounded-md bg-rose-50 px-2 py-1 text-sm text-rose-800 dark:bg-rose-950 dark:text-rose-200">{error}</p> : null}
         {preview && best ? (
           <>
-            <p className="num text-3xl">{money(best.net_monthly_ron)} <span className="text-base font-normal text-zinc-500">net / month</span></p>
+            <p className="num text-3xl">
+              <output>{money(best.net_monthly_ron)}</output>{" "}
+              <span className="text-base font-normal text-zinc-500">net / month</span>
+            </p>
             <p className="text-sm text-zinc-500">
               {money(best.net_monthly_ron / (preview.fx.display_rate_to_ron || 1), preview.fx.display_currency)} · {best.label} · effective {ratePercent(best.effective_tax_rate)}
             </p>
@@ -248,10 +263,10 @@ export function OfferEditor({ initial, id }: { initial: OfferInput; id?: string 
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Card className="grid gap-3 p-4">
-      <h2 className="text-sm font-medium">{title}</h2>
+    <fieldset className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <legend className="px-1 text-sm font-medium">{title}</legend>
       {children}
-    </Card>
+    </fieldset>
   );
 }
 
@@ -273,11 +288,13 @@ function ExtraRow({
   return (
     <div className="grid items-end gap-2 sm:grid-cols-[1fr_auto_auto]">
       <NumberField label={label} info={info} value={amount} onChange={onAmount} />
-      <label className="flex items-center gap-2 pb-2 text-sm">
-        <Switch checked={counted} onCheckedChange={onCount} />
-        Count as income
+      <div className="flex items-center gap-2 pb-2 text-sm">
+        <label className="flex items-center gap-2">
+          <Switch checked={counted} onCheckedChange={onCount} />
+          Count as income
+        </label>
         <InfoTip text="Off: the amount is stored but left out of net. On: it changes the result, using the tax treatment in the info tip on the amount." />
-      </label>
+      </div>
       <Button
         type="button"
         variant="ghost"

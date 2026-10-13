@@ -177,11 +177,12 @@ function Comparison({ showCharts }: { showCharts: boolean }) {
 
       <div className="hidden overflow-x-auto rounded-lg border border-zinc-200 md:block dark:border-zinc-800">
         <table className="w-full border-separate border-spacing-0 text-left text-sm">
+          <caption className="sr-only">Offer comparison</caption>
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-zinc-100 px-3 py-2 text-xs uppercase text-zinc-500 dark:bg-zinc-900">Metric</th>
+              <th scope="col" className="sticky left-0 z-10 bg-zinc-100 px-3 py-2 text-xs uppercase text-zinc-500 dark:bg-zinc-900">Metric</th>
               {rows.map((row) => (
-                <th key={row.id} className="min-w-40 bg-zinc-100 px-3 py-2 align-top font-medium dark:bg-zinc-900">
+                <th scope="col" key={row.id} className="min-w-40 bg-zinc-100 px-3 py-2 align-top font-medium dark:bg-zinc-900">
                   <Link to={`/offers/${row.id}`} className="hover:underline">{row.label}</Link>
                   <div className="mt-1 flex flex-wrap gap-1 font-normal">
                     {row.is_current ? <Badge>Current</Badge> : null}
@@ -209,7 +210,7 @@ function Comparison({ showCharts }: { showCharts: boolean }) {
           <tbody>
             {metrics.map((metric) => (
               <tr key={metric.key}>
-                <th className="sticky left-0 z-10 border-t border-zinc-200 bg-white px-3 py-2 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">{metric.label}</th>
+                <th scope="row" className="sticky left-0 z-10 border-t border-zinc-200 bg-white px-3 py-2 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">{metric.label}</th>
                 {rows.map((row) => (
                   <td key={row.id} className="num border-t border-zinc-200 px-3 py-2 align-top dark:border-zinc-800">{metric.render(row)}</td>
                 ))}
@@ -219,19 +220,21 @@ function Comparison({ showCharts }: { showCharts: boolean }) {
         </table>
       </div>
 
-      <div className="grid gap-3 md:hidden">
+      <ul className="grid gap-3 md:hidden">
         {rows.map((row) => (
-          <Card key={row.id} className="grid gap-2 p-3 text-sm">
-            <Link to={`/offers/${row.id}`} className="font-medium">{row.label}</Link>
-            {metrics.map((metric) => (
-              <div key={metric.key} className="flex items-start justify-between gap-3">
-                <span className="text-zinc-500">{metric.label}</span>
-                <span className="num text-right">{metric.render(row)}</span>
-              </div>
-            ))}
-          </Card>
+          <li key={row.id}>
+            <Card className="grid gap-2 p-3 text-sm">
+              <Link to={`/offers/${row.id}`} className="font-medium">{row.label}</Link>
+              {metrics.map((metric) => (
+                <div key={metric.key} className="flex items-start justify-between gap-3">
+                  <span className="text-zinc-500">{metric.label}</span>
+                  <span className="num text-right">{metric.render(row)}</span>
+                </div>
+              ))}
+            </Card>
+          </li>
         ))}
-      </div>
+      </ul>
 
       <Card className="no-print grid gap-3 p-4">
         <h2 className="font-medium">Offer A versus offer B</h2>
@@ -265,17 +268,19 @@ function Comparison({ showCharts }: { showCharts: boolean }) {
               <option key={item.id} value={item.id}>{item.label}</option>
             ))}
           </Select>
-          {chain.map((id, index) => {
-            const label = compare.data?.items.find((item) => item.id === id)?.label ?? "Offer";
-            return (
-              <span key={`${id}-${index}`} className="inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700">
-                {index + 1}. {label}
-                <button aria-label={`Move ${label} earlier`} onClick={() => index > 0 && setChain(swap(chain, index, index - 1))}>↑</button>
-                <button aria-label={`Move ${label} later`} onClick={() => index < chain.length - 1 && setChain(swap(chain, index, index + 1))}>↓</button>
-                <button aria-label={`Remove ${label}`} onClick={() => setChain(chain.filter((_, i) => i !== index))}><X size={12} /></button>
-              </span>
-            );
-          })}
+          <ol className="flex flex-wrap items-center gap-2">
+            {chain.map((id, index) => {
+              const label = compare.data?.items.find((item) => item.id === id)?.label ?? "Offer";
+              return (
+                <li key={`${id}-${index}`} className="inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700">
+                  {label}
+                  <button type="button" aria-label={`Move ${label} earlier`} onClick={() => index > 0 && setChain(swap(chain, index, index - 1))}>↑</button>
+                  <button type="button" aria-label={`Move ${label} later`} onClick={() => index < chain.length - 1 && setChain(swap(chain, index, index + 1))}>↓</button>
+                  <button type="button" aria-label={`Remove ${label}`} onClick={() => setChain(chain.filter((_, i) => i !== index))}><X size={12} /></button>
+                </li>
+              );
+            })}
+          </ol>
         </div>
         <ol className="grid gap-1 text-sm">
           {(compare.data?.chain ?? []).map((step) => (

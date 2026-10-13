@@ -396,21 +396,26 @@ function InflationEditor() {
           </li>
         ))}
       </ul>
-      <div className="flex flex-wrap gap-2">
-        <Input className="w-28" type="number" value={year} onChange={(event) => setYear(Number(event.target.value))} />
-        <Input className="w-28" type="number" value={rate} onChange={(event) => setRate(Number(event.target.value))} />
-        <Button
-          variant="outline"
-          onClick={() =>
-            void api(`/api/inflation/${year}`, {
-              method: "PUT",
-              body: JSON.stringify({ annual_rate_percent: rate, note: "Edited in Settings." }),
-            }).then(() => client.invalidateQueries({ queryKey: ["inflation"] }))
-          }
-        >
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void api(`/api/inflation/${year}`, {
+            method: "PUT",
+            body: JSON.stringify({ annual_rate_percent: rate, note: "Edited in Settings." }),
+          }).then(() => client.invalidateQueries({ queryKey: ["inflation"] }));
+        }}
+      >
+        <Field label="Year">
+          <Input className="w-28" type="number" value={year} onChange={(event) => setYear(Number(event.target.value))} required />
+        </Field>
+        <Field label="Annual rate %">
+          <Input className="w-28" type="number" value={rate} onChange={(event) => setRate(Number(event.target.value))} required />
+        </Field>
+        <Button type="submit" variant="outline">
           Save year
         </Button>
-      </div>
+      </form>
     </Card>
   );
 }

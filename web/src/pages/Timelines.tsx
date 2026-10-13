@@ -93,23 +93,29 @@ export function TimelinesPage() {
   return (
     <div className="grid gap-4">
       <h1 className="text-xl font-semibold">Timelines</h1>
-      <Card className="grid gap-3 p-4 md:grid-cols-4">
+      <form
+        className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void create();
+        }}
+      >
         <Field label="Label" info="A name for this projection, for example Stay versus Offer B.">
-          <Input value={label} onChange={(event) => setLabel(event.target.value)} />
+          <Input value={label} onChange={(event) => setLabel(event.target.value)} required />
         </Field>
         <Field label="Start" info="The first month of the projection. Raises and one-offs count from this month.">
-          <Input type="date" value={start} onChange={(event) => setStart(event.target.value)} />
+          <Input type="date" value={start} onChange={(event) => setStart(event.target.value)} required />
         </Field>
         <Field label="Horizon (months)" info="How many months to simulate. 36 is three years. Each month runs the same tax engine.">
-          <Input type="number" value={horizon} onChange={(event) => setHorizon(Number(event.target.value))} />
+          <Input type="number" value={horizon} onChange={(event) => setHorizon(Number(event.target.value))} required min={1} />
         </Field>
         <div className="flex items-end">
-          <Button onClick={() => void create()}>Create timeline</Button>
+          <Button type="submit">Create timeline</Button>
         </div>
-      </Card>
-      <div className="grid gap-2">
+      </form>
+      <ul className="grid gap-2">
         {(timelines.data ?? []).map((timeline) => (
-          <div key={timeline.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+          <li key={timeline.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
             <Link to={`/timelines/${timeline.id}`} className="min-w-0 flex-1">
               <div className="font-medium">{timeline.label}</div>
               <div className="text-sm text-zinc-500">
@@ -128,9 +134,9 @@ export function TimelinesPage() {
             >
               <Button variant="destructive" size="sm">Delete</Button>
             </ConfirmButton>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
@@ -287,25 +293,35 @@ export function TimelineDetailPage() {
             }
           />
         </Field>
-        <label className="flex items-end gap-2 text-sm">
-          <Switch
-            checked={data.use_inflation}
-            onCheckedChange={(checked) =>
-              void api(`/api/timelines/${id}`, { method: "PATCH", body: JSON.stringify({ use_inflation: checked }) }).then(() =>
-                client.invalidateQueries({ queryKey: ["timeline", id] }),
-              )
-            }
-          />
-          Use inflation series for real values
+        <div className="flex items-end gap-2 text-sm">
+          <label className="flex items-center gap-2">
+            <Switch
+              checked={data.use_inflation}
+              onCheckedChange={(checked) =>
+                void api(`/api/timelines/${id}`, { method: "PATCH", body: JSON.stringify({ use_inflation: checked }) }).then(() =>
+                  client.invalidateQueries({ queryKey: ["timeline", id] }),
+                )
+              }
+            />
+            Use inflation series for real values
+          </label>
           <InfoTip text="Divides later months by cumulative inflation from Settings, so you can compare purchasing power with the nominal paycheck." />
-        </label>
-        <label className="flex items-end gap-2 text-sm">
-          <Switch checked={real} onCheckedChange={setReal} disabled={!data.use_inflation} />
-          Chart real (inflation-adjusted) net
+        </div>
+        <div className="flex items-end gap-2 text-sm">
+          <label className="flex items-center gap-2">
+            <Switch checked={real} onCheckedChange={setReal} disabled={!data.use_inflation} />
+            Chart real (inflation-adjusted) net
+          </label>
           <InfoTip text="Switches the net line and the yearly table to inflation-adjusted values. Turn on the inflation series first." />
-        </label>
+        </div>
       </Card>
-      <Card className="grid gap-3 p-4 md:grid-cols-4">
+      <form
+        className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (offerId) void addTrack();
+        }}
+      >
         <Field label="Track from offer" info="A track is one offer projected over the horizon. Add several to compare staying with taking an offer.">
           <Select value={offerId} onChange={(event) => setOfferId(event.target.value)}>
             <option value="">Choose offer</option>
@@ -331,9 +347,9 @@ export function TimelineDetailPage() {
           <Input type="color" value={trackColor} onChange={(event) => setTrackColor(event.target.value)} aria-label="Track color" />
         </Field>
         <div className="flex items-end">
-          <Button disabled={!offerId} onClick={() => void addTrack()}>Add track</Button>
+          <Button type="submit" disabled={!offerId}>Add track</Button>
         </div>
-      </Card>
+      </form>
       <div className="grid gap-2">
         {data.tracks.map((track) => (
           <div key={track.id} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
@@ -376,7 +392,13 @@ export function TimelineDetailPage() {
           </div>
         ))}
       </div>
-      <Card className="grid gap-3 p-4 md:grid-cols-6">
+      <form
+        className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (raiseTrack) void addRaise();
+        }}
+      >
         <Field label="Raise on track" info="Applies from the chosen month onward. Later months use the raised amount.">
           <Select value={raiseTrack} onChange={(event) => setRaiseTrack(event.target.value)}>
             <option value="">Track</option>
@@ -423,14 +445,16 @@ export function TimelineDetailPage() {
           </Select>
         </Field>
         <div className="flex items-end gap-2">
-          <label className="flex items-center gap-2 text-xs">
-            <Switch checked={compounding} onCheckedChange={setCompounding} />
-            Compound
+          <div className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2">
+              <Switch checked={compounding} onCheckedChange={setCompounding} />
+              Compound
+            </label>
             <InfoTip text="On: each percent raise stacks on the previous one. Off: the percent is applied to the original amount." />
-          </label>
-          <Button disabled={!raiseTrack} onClick={() => void addRaise()}>Add raise</Button>
+          </div>
+          <Button type="submit" disabled={!raiseTrack}>Add raise</Button>
         </div>
-      </Card>
+      </form>
       {run.isLoading || run.isFetching ? <p className="text-sm text-zinc-500">Computing the monthly series…</p> : null}
       {run.isError ? <p className="text-sm text-rose-700">{(run.error as Error).message}</p> : null}
       <div className="grid gap-3 md:grid-cols-4">
@@ -555,7 +579,7 @@ export function TimelineDetailPage() {
                     <thead>
                       <tr className="text-zinc-500">
                         {["Month", "Gross", "Net", "Effective", "Rules", "FX"].map((heading) => (
-                          <th key={heading} className="px-2 py-1">{heading}</th>
+                          <th key={heading} scope="col" className="px-2 py-1">{heading}</th>
                         ))}
                       </tr>
                     </thead>
@@ -657,51 +681,51 @@ function Adjustments({
           </ConfirmButton>
         </div>
       ) : null}
-      <div className="flex flex-wrap items-end gap-2">
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onSave({
+            ...current,
+            annual_bonus_month: bonusMonth ? Number(bonusMonth) : null,
+            annual_bonus_gross: bonusGross,
+            annual_bonus_currency: "RON",
+            one_offs: current.one_offs ?? [],
+          });
+        }}
+      >
         <Field label="Annual bonus month (1–12)" info="Calendar month, not the timeline month. 12 means every December.">
           <Input className="w-24" value={bonusMonth} placeholder={String(current.annual_bonus_month ?? "")} onChange={(event) => setBonusMonth(event.target.value)} />
         </Field>
         <Field label="Bonus gross" info="Gross RON added that month and taxed with the same engine. It is not spread across the year.">
           <Input className="w-28" type="number" value={bonusGross} onChange={(event) => setBonusGross(Number(event.target.value))} />
         </Field>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            void onSave({
-              ...current,
-              annual_bonus_month: bonusMonth ? Number(bonusMonth) : null,
-              annual_bonus_gross: bonusGross,
-              annual_bonus_currency: "RON",
-              one_offs: current.one_offs ?? [],
-            })
-          }
-        >
+        <Button type="submit" size="sm" variant="outline">
           Save bonus
         </Button>
-      </div>
-      <div className="flex flex-wrap items-end gap-2">
+      </form>
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onSave({
+            annual_bonus_month: current.annual_bonus_month ?? null,
+            annual_bonus_gross: current.annual_bonus_gross ?? 0,
+            annual_bonus_currency: "RON",
+            one_offs: [...(current.one_offs ?? []), { month_index: Math.max(0, oneOffMonth - 1), gross: oneOffGross, currency: "RON" }],
+          });
+        }}
+      >
         <Field label="One-off month number" info="Timeline month, starting at 1. The bonus is added only in that month.">
           <Input className="w-24" type="number" value={oneOffMonth} onChange={(event) => setOneOffMonth(Number(event.target.value))} />
         </Field>
         <Field label="One-off gross" info="Extra gross in RON for that single month. Delete it from the list if you added it by mistake.">
           <Input className="w-28" type="number" value={oneOffGross} onChange={(event) => setOneOffGross(Number(event.target.value))} />
         </Field>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            void onSave({
-              annual_bonus_month: current.annual_bonus_month ?? null,
-              annual_bonus_gross: current.annual_bonus_gross ?? 0,
-              annual_bonus_currency: "RON",
-              one_offs: [...(current.one_offs ?? []), { month_index: Math.max(0, oneOffMonth - 1), gross: oneOffGross, currency: "RON" }],
-            })
-          }
-        >
+        <Button type="submit" size="sm" variant="outline">
           Add one-off
         </Button>
-      </div>
+      </form>
       <ul className="grid gap-1 text-xs text-zinc-500">
         {(current.one_offs ?? []).map((item, index) => (
           <li key={`${item.month_index}-${index}`} className="flex items-center justify-between gap-2">

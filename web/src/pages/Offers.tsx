@@ -50,11 +50,11 @@ export function OffersPage() {
           </Button>
         </div>
       </div>
-      <div className="grid gap-2">
+      <ul className="grid gap-2">
         {rows.map((offer) => {
           const net = nets.get(offer.id);
           return (
-            <div key={offer.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <li key={offer.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
               <Link to={`/offers/${offer.id}`} className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{offer.label}</span>
@@ -68,15 +68,15 @@ export function OffersPage() {
                 </p>
               </Link>
               <Button variant="outline" size="sm" onClick={() => void clone(offer)}>Clone</Button>
-            </div>
+            </li>
           );
         })}
-        {offers.data?.length === 0 ? (
-          <p className="text-sm text-zinc-500">
-            No offers yet. <Link className="underline" to="/offers/new">Add your current income</Link> first.
-          </p>
-        ) : null}
-      </div>
+      </ul>
+      {offers.data?.length === 0 ? (
+        <p className="text-sm text-zinc-500">
+          No offers yet. <Link className="underline" to="/offers/new">Add your current income</Link> first.
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import type { Currency } from "@offer-compare/engine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -44,13 +44,19 @@ export function Shell() {
 
   return (
     <div className="min-h-screen">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-teal-700 focus:px-3 focus:py-2 focus:text-sm focus:text-white"
+      >
+        Skip to content
+      </a>
       <header className="no-print sticky top-0 z-20 border-b border-zinc-200 bg-zinc-50/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="mr-2">
-            <div className="text-sm font-semibold tracking-tight">Offer Compare RO</div>
-            <div className="text-xs text-zinc-500">{user?.email}</div>
-          </div>
-          <nav className="flex flex-wrap gap-1">
+          <Link to="/" className="mr-2 rounded-md focus-visible:ring-2 focus-visible:ring-teal-600">
+            <span className="block text-sm font-semibold tracking-tight">Offer Compare RO</span>
+            <span className="block text-xs text-zinc-500">{user?.email}</span>
+          </Link>
+          <nav aria-label="Primary" className="flex flex-wrap gap-1">
             {links.map(([to, label]) => (
               <NavLink
                 key={to}
@@ -92,7 +98,7 @@ export function Shell() {
           </div>
         </div>
         {unverified > 0 && !hideBanner ? (
-          <div className="border-t border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+          <aside className="border-t border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
             <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
               <span>
                 {unverified} tax {unverified === 1 ? "rule is" : "rules are"} still unverified. Figures are estimates until you check them against ANAF / Codul Fiscal.
@@ -101,6 +107,7 @@ export function Shell() {
                 Review in Settings
               </NavLink>
               <button
+                type="button"
                 className="ml-auto text-xs underline"
                 onClick={() => {
                   sessionStorage.setItem("oc.hide-unverified", "1");
@@ -110,15 +117,17 @@ export function Shell() {
                 Dismiss for this session
               </button>
             </div>
-          </div>
+          </aside>
         ) : null}
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main id="main" className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />
       </main>
       <footer className="mx-auto max-w-7xl px-4 pb-8 text-xs leading-relaxed text-zinc-500">
-        Estimates only, not tax advice. Romanian tax figures are seeded defaults until you mark them verified in Settings.
-        Check every rate against ANAF / Codul Fiscal and confirm the result with an accountant.
+        <p>
+          Estimates only, not tax advice. Romanian tax figures are seeded defaults until you mark them verified in Settings.
+          Check every rate against ANAF / Codul Fiscal and confirm the result with an accountant.
+        </p>
       </footer>
     </div>
   );

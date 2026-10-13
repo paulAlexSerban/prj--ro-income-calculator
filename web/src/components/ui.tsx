@@ -1,10 +1,8 @@
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as SwitchPrimitive from "@radix-ui/react-switch";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
-import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -37,10 +35,11 @@ export function Button({
   variant,
   size,
   asChild = false,
+  type,
   ...props
 }: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants> & { asChild?: boolean }) {
   const Comp = asChild ? Slot : "button";
-  return <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+  return <Comp type={asChild ? type : (type ?? "button")} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }
 
 export function Card({ className, ...props }: React.ComponentProps<"div">) {
@@ -129,26 +128,29 @@ export const TabsTrigger = ({ className, ...props }: React.ComponentProps<typeof
 );
 export const TabsContent = TabsPrimitive.Content;
 
+const popoverClass =
+  "m-0 max-w-xs rounded-md border-0 bg-zinc-900 px-2 py-1.5 text-xs leading-relaxed text-white shadow-lg";
+
 export function InfoTip({ text }: { text: string }) {
+  const id = useId();
   return (
-    <TooltipPrimitive.Root>
-      <TooltipPrimitive.Trigger asChild>
-        <button
-          type="button"
-          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-zinc-400 text-[10px] font-semibold leading-none text-zinc-600 hover:border-teal-700 hover:text-teal-800 dark:border-zinc-500 dark:text-zinc-300"
-          aria-label={text}
-        >
-          i
-        </button>
-      </TooltipPrimitive.Trigger>
-      <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content className="z-50 max-w-xs rounded-md bg-zinc-900 px-2 py-1.5 text-xs leading-relaxed text-white shadow-lg">
-          {text}
-        </TooltipPrimitive.Content>
-      </TooltipPrimitive.Portal>
-    </TooltipPrimitive.Root>
+    <>
+      <button
+        type="button"
+        popoverTarget={id}
+        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-zinc-400 text-[10px] font-semibold leading-none text-zinc-600 hover:border-teal-700 hover:text-teal-800 dark:border-zinc-500 dark:text-zinc-300"
+        aria-label={text}
+      >
+        i
+      </button>
+      <div id={id} popover="auto" className={popoverClass}>
+        {text}
+      </div>
+    </>
   );
 }
+
+const labelledControl = new Set<unknown>([Input, Select, Textarea, "input", "select", "textarea"]);
 
 export function Field({
   label,
@@ -161,33 +163,47 @@ export function Field({
   info?: string;
   children: React.ReactNode;
 }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
+  const canLabel = React.isValidElement(children) && labelledControl.has(children.type);
+  const control = canLabel
+    ? React.cloneElement(children as React.ReactElement<{ id?: string; "aria-describedby"?: string }>, {
+        id,
+        "aria-describedby": hint ? hintId : undefined,
+      })
+    : children;
   return (
     <div className="grid gap-1 text-sm">
       <div className="flex items-center gap-1.5 text-zinc-500">
-        <span>{label}</span>
+        {canLabel ? <label htmlFor={id}>{label}</label> : <span>{label}</span>}
         {info ? <InfoTip text={info} /> : null}
       </div>
-      {children}
-      {hint ? <span className="text-xs text-rose-600">{hint}</span> : null}
+      {control}
+      {hint ? (
+        <span id={hintId} className="text-xs text-rose-600">
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }
 
-export const TooltipProvider = TooltipPrimitive.Provider;
-
 export function Hint({ text, children }: { text?: string; children: React.ReactNode }) {
+  const id = useId();
   if (!text) return <>{children}</>;
   return (
-    <TooltipPrimitive.Root>
-      <TooltipPrimitive.Trigger asChild>
-        <span className="cursor-help underline decoration-dotted underline-offset-4">{children}</span>
-      </TooltipPrimitive.Trigger>
-      <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content className="z-50 max-w-sm whitespace-pre-wrap rounded-md bg-zinc-900 px-2 py-1.5 text-xs leading-relaxed text-white shadow-lg">
-          {text}
-        </TooltipPrimitive.Content>
-      </TooltipPrimitive.Portal>
-    </TooltipPrimitive.Root>
+    <>
+      <button
+        type="button"
+        popoverTarget={id}
+        className="cursor-help border-0 bg-transparent p-0 text-left text-inherit underline decoration-dotted underline-offset-4"
+      >
+        {children}
+      </button>
+      <div id={id} popover="auto" className={`${popoverClass} whitespace-pre-wrap`}>
+        {text}
+      </div>
+    </>
   );
 }
 
@@ -206,31 +222,38 @@ export function ConfirmButton({
   onConfirm: () => void | Promise<void>;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const trigger = React.isValidElement(children)
+    ? React.cloneElement(children as React.ReactElement<{ onClick?: () => void }>, {
+        onClick: () => dialogRef.current?.showModal(),
+      })
+    : (
+        <Button onClick={() => dialogRef.current?.showModal()}>{children}</Button>
+      );
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
-      <DialogPrimitive.Trigger asChild>{children}</DialogPrimitive.Trigger>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 w-[min(24rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-          <DialogPrimitive.Title className="font-medium">{title}</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="mt-1 text-sm text-zinc-500">{body}</DialogPrimitive.Description>
-          <div className="mt-4 flex justify-end gap-2">
-            <DialogPrimitive.Close asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogPrimitive.Close>
-            <Button
-              variant={destructive ? "destructive" : "default"}
-              onClick={() => {
-                void Promise.resolve(onConfirm()).finally(() => setOpen(false));
-              }}
-            >
+    <>
+      {trigger}
+      <dialog
+        ref={dialogRef}
+        className="w-[min(24rem,calc(100%-2rem))] rounded-lg border border-zinc-200 bg-white p-4 text-zinc-950 shadow-lg backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+        onClose={(event) => {
+          if (event.currentTarget.returnValue === "confirm") void onConfirm();
+        }}
+      >
+        <form method="dialog" className="grid gap-3">
+          <h2 className="font-medium">{title}</h2>
+          <p className="text-sm text-zinc-500">{body}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="submit" variant="outline" value="cancel">
+              Cancel
+            </Button>
+            <Button type="submit" variant={destructive ? "destructive" : "default"} value="confirm">
               {confirmLabel}
             </Button>
           </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+        </form>
+      </dialog>
+    </>
   );
 }
 
